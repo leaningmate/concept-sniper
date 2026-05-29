@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>개념 스나이퍼 - 틀린 개념 찾기 메타인지 트레이너</title>
+    <!-- Google Fonts: Pretendard & Orbitron (For HUD style) -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tone.js for premium sound effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+        }
+        .hud-font {
+            font-family: 'Orbitron', sans-serif;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        /* Pulsing crosshair target animation */
+        @keyframes pulse-target {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; border-color: #f97316; }
+        }
+        .pulse-target-active {
+            animation: pulse-target 2s infinite ease-in-out;
+        }
+        /* Low time pulsing alert for the progress bar */
+        @keyframes pulse-red {
+            0%, 100% { background-color: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.8); }
+            50% { background-color: #f87171; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
+        }
+        .timer-warning {
+            animation: pulse-red 0.8s infinite;
+        }
+        /* Soft unlock fade-in animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-orange-500 selection:text-white">
+
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50 px-4 py-3">
+        <div class="max-w-6xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-gradient-to-tr from-orange-600 to-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-orange-900/30">
+                    <i class="fa-solid fa-crosshairs text-xl text-white"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-tight flex items-center gap-2">
+                        개념 스나이퍼 <span class="text-xs bg-orange-500/20 text-orange-400 font-mono px-2 py-0.5 rounded border border-orange-500/30">v1.4</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">교묘한 오답을 저격하는 메타인지 트레이너</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <!-- Sound Toggle -->
+                <button id="soundToggleBtn" onclick="toggleSound()" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center gap-1 text-sm">
+                    <i id="soundIcon" class="fa-solid fa-volume-high"></i>
+                    <span class="hidden sm:inline">효과음 On</span>
+                </button>
+                <!-- Quick Stats -->
+                <div class="hidden md:flex items-center gap-3 bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-700">
+                    <span class="text-xs text-slate-400">오늘의 저격 성공:</span>
+                    <span id="headerClearedCount" class="hud-font font-bold text-orange-400 text-sm">0 / 5</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-6 flex flex-col gap-6">
+        
+        <section id="dashboardSection" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- D-Day & Quick Status -->
+            <div class="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl relative overflow-hidden">
+                <div class="absolute -right-10 -top-10 w-32 h-32 bg-orange-600/10 rounded-full blur-3xl"></div>
+                <div>
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">🎯 시험 목표 디데이</span>
+                        <button onclick="openTargetConfigModal()" class="text-slate-400 hover:text-orange-400 text-xs transition-colors">
+                            <i class="fa-solid fa-gear"></i> 변경
+                        </button>
+                    </div>
+                    <div onclick="openTargetConfigModal()" class="mb-4 cursor-pointer group/dday p-3 -m-3 rounded-xl hover:bg-slate-800/40 transition-all border border-transparent hover:border-slate-700/50" title="클릭하여 목표 시험 및 디데이 변경">
+                        <h2 id="targetExamTitle" class="text-xl font-bold text-white truncate group-hover/dday:text-orange-400 transition-colors">이러닝운영관리사</h2>
+                        <div class="flex items-baseline gap-2 mt-1">
+                            <span id="targetExamDDay" class="hud-font text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-400 group-hover/dday:scale-102 transition-transform origin-left inline-block">D-30</span>
+                            <span id="targetExamDate" class="text-xs text-slate-400">2026.11.23 시험 기준</span>
+                        </div>
+                    </div>
+                    <!-- ProgressBar -->
+                    <div class="space-y-2">
+                        <div class="flex justify-between text-xs">
+                            <span class="text-slate-400">일일 저격 목표 달성률</span>
+                            <span id="dailyProgressPercent" class="text-orange-400 font-mono font-bold">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                            <div id="dailyProgressBar" class="bg-gradient-to-r from-orange-500 to-amber-400 h-full transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-800/80 grid grid-cols-3 gap-2 text-center">
+                    <div class="p-2 bg-slate-950/50 rounded-lg">
+                        <p class="text-[10px] text-slate-400 mb-0.5">최고 콤보</p>
+                        <p id="statMaxCombo" class="hud-font font-bold text-white text-sm">0</p>
+                    </div>
+                    <div class="p-2 bg-slate-950/50 rounded-lg">
+                        <p class="text-[10px] text-slate-400 mb-0.5">정확도</p>
+                        <p id="statAccuracy" class="hud-font font-bold text-white text-sm">0%</p>
+                    </div>
+                    <div class="p-2 bg-slate-950/50 rounded-lg">
+                        <p class="text-[10px] text-slate-400 mb-0.5">클리어수</p>
+                        <p id="statTotalCleared" class="hud-font font-bold text-white text-sm">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subject Cards Grid -->
+            <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-bold text-base text-white flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-orange-500"></i> 미션 과목 선택
+                    </h3>
+                    <span class="text-xs text-slate-400">원하는 과목의 틀린 부분을 찾으세요!</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 overflow-y-auto max-h-[220px] pr-1" id="subjectGrid">
+                    <!-- Dynamic subjects injected here -->
+                </div>
+            </div>
+        </section>
+
+        <section id="gamePlaySection" class="hidden flex-col gap-4">
+            
+            <!-- HUD / Status Bar -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-wrap gap-4 items-center justify-between shadow-xl">
+                <div class="flex items-center gap-3">
+                    <button onclick="quitGame()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition-colors">
+                        <i class="fa-solid fa-arrow-left mr-1"></i> 나가기
+                    </button>
+                    <div class="h-4 w-px bg-slate-800"></div>
+                    <div>
+                        <span id="gameCurrentCategory" class="text-xs bg-orange-500/10 text-orange-400 border border-orange-500/20 px-2.5 py-0.5 rounded font-medium">과목명</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-6">
+                    <!-- Combo -->
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs text-slate-400 uppercase">Combo</span>
+                        <span id="gameComboCount" class="hud-font font-black text-xl text-amber-400 animate-bounce">0</span>
+                    </div>
+                    <!-- HP Hearts -->
+                    <div class="flex items-center gap-1 text-rose-500" id="heartsContainer">
+                        <i class="fa-solid fa-heart"></i>
+                        <i class="fa-solid fa-heart"></i>
+                        <i class="fa-solid fa-heart"></i>
+                    </div>
+                    <!-- Timer -->
+                    <div class="flex items-center gap-2">
+                        <i class="fa-regular fa-clock text-slate-400 text-xs"></i>
+                        <div class="w-24 bg-slate-800 h-2 rounded-full overflow-hidden relative">
+                            <div id="gameTimerBar" class="bg-rose-500 h-full w-full transition-all duration-100 ease-linear"></div>
+                        </div>
+                        <span id="gameTimerText" class="hud-font text-xs text-rose-400 w-5 font-bold">30</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Target Matching Interface -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+                
+                <!-- Left: Card A (Correct / Reference) -->
+                <div id="correctCardWrapper" class="bg-slate-900 border-2 border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between transition-all duration-300">
+                    <div id="correctCardHeader" class="absolute top-0 left-0 bg-slate-800 text-slate-400 font-bold px-4 py-1 text-xs rounded-br-xl flex items-center gap-1.5 transition-all">
+                        <i class="fa-solid fa-lock"></i> 정석 개념 (잠금됨)
+                    </div>
+                    <div class="mt-4 mb-6 flex-1 flex flex-col justify-center">
+                        <div id="conceptTextCorrect" class="text-base sm:text-lg leading-relaxed text-slate-300 font-medium">
+                            <!-- Locked placeholder or actual text injected via JavaScript -->
+                        </div>
+                    </div>
+                    <div id="correctCardFooter" class="border-t border-slate-800/80 pt-3 text-xs text-slate-500 flex items-center gap-2">
+                        <i class="fa-solid fa-circle-info"></i> 함정을 저격하기 전까지는 정석 개념이 격리됩니다.
+                    </div>
+                </div>
+
+                <!-- Right: Card B (Sniper target / Flawed Card) -->
+                <div class="bg-slate-900 border-2 border-orange-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between">
+                    <div class="absolute top-0 left-0 bg-orange-500 text-slate-950 font-bold px-4 py-1 text-xs rounded-br-xl flex items-center gap-1.5">
+                        <i class="fa-solid fa-crosshairs animate-pulse"></i> 스나이퍼 타겟 (오답 훼손됨)
+                    </div>
+                    <div class="absolute top-2 right-4 flex items-center gap-1 text-[11px] text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">
+                        <i class="fa-solid fa-hand-pointer text-xs"></i> 틀린 단어를 터치하여 저격하세요!
+                    </div>
+                    
+                    <div class="mt-4 mb-6 flex-1 flex flex-col justify-center">
+                        <!-- Intersecting word buttons for sniping -->
+                        <div id="conceptTextTargetContainer" class="flex flex-wrap gap-x-1 gap-y-2 items-center text-base sm:text-lg leading-relaxed font-medium">
+                            <!-- Tokens injected via JavaScript -->
+                        </div>
+                    </div>
+                    
+                    <div class="border-t border-slate-800/80 pt-3 text-xs text-slate-400 flex items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation text-orange-400 animate-pulse"></i> 출제자의 함정이 한 군데 심겨 있습니다. 매의 눈으로 포착하세요.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quiz Navigation -->
+            <div class="flex justify-between items-center bg-slate-900/40 p-4 border border-slate-800/60 rounded-xl">
+                <span id="quizIndexIndicator" class="text-xs text-slate-400 font-mono">문항 1/5</span>
+                <span class="text-xs text-slate-500">주의: 오답을 터치하면 생명이 차감됩니다.</span>
+            </div>
+        </section>
+
+        <section id="feedbackSection" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl flex-col items-center text-center max-w-xl mx-auto my-8 relative overflow-hidden">
+            <div id="feedbackBorderBg" class="absolute inset-x-0 top-0 h-2 bg-gradient-to-r from-emerald-500 to-teal-400"></div>
+            
+            <div id="feedbackIconWrapper" class="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center border-2 border-emerald-500 text-emerald-400 text-3xl mb-4 animate-bounce">
+                <i class="fa-solid fa-bullseye"></i>
+            </div>
+
+            <h3 id="feedbackTitle" class="text-2xl font-bold text-white mb-2">TARGET HIT!</h3>
+            <p id="feedbackDesc" class="text-slate-400 text-sm mb-6 max-w-md">훌륭합니다! 교묘하게 변형된 함정 핵심어를 명확하게 색출했습니다.</p>
+
+            <!-- Comparative Explanation Card -->
+            <div class="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-4 text-left space-y-3 mb-6">
+                <div>
+                    <span class="text-[11px] bg-emerald-500/20 text-emerald-400 font-bold px-2 py-0.5 rounded">정석 정답</span>
+                    <p id="feedbackCorrectAnswer" class="text-sm text-slate-200 mt-1 leading-relaxed">정답 문장</p>
+                </div>
+                <div class="border-t border-slate-800/60 pt-3">
+                    <span class="text-[11px] bg-rose-500/20 text-rose-400 font-bold px-2 py-0.5 rounded">출제자의 낚시</span>
+                    <p id="feedbackWrongAnswer" class="text-sm text-slate-300 mt-1 leading-relaxed">틀린 단어가 표시된 문장</p>
+                </div>
+                <div class="border-t border-slate-800/60 pt-3">
+                    <span class="text-[11px] text-slate-400 font-bold flex items-center gap-1">
+                        <i class="fa-solid fa-lightbulb text-amber-400"></i> 메타 해설집
+                    </span>
+                    <p id="feedbackExplanation" class="text-xs text-slate-400 mt-1 leading-relaxed">이론 설명 및 합격 꿀팁</p>
+                </div>
+            </div>
+
+            <div class="flex gap-3 w-full">
+                <button onclick="quitGame()" class="flex-1 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition-all text-sm">
+                    그만두기
+                </button>
+                <button id="nextQuizBtn" onclick="loadNextQuiz()" class="flex-1 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 hover:shadow-lg hover:shadow-orange-500/20 text-slate-950 font-bold transition-all text-sm flex items-center justify-center gap-1.5">
+                    다음 저격 타겟 <i class="fa-solid fa-chevron-right text-xs"></i>
+                </button>
+            </div>
+        </section>
+
+        <section id="reviewSection" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
+                <h3 class="font-bold text-base text-white flex items-center gap-2">
+                    <i class="fa-solid fa-book-bookmark text-rose-500"></i> 마이 오답 대시보드
+                </h3>
+                <span class="text-xs bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2.5 py-0.5 rounded" id="reviewCountBadge">저장된 오답 0개</span>
+            </div>
+            
+            <div id="reviewContainer" class="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                <!-- Fallback empty state -->
+                <div id="emptyReviewState" class="text-center py-8 text-slate-500 space-y-2">
+                    <i class="fa-solid fa-graduation-cap text-3xl opacity-50"></i>
+                    <p class="text-sm">아직 저장된 오답이 없습니다. 게임에서 탈락하거나 오답을 터치하면 이곳에 수집됩니다!</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-base text-white flex items-center gap-2">
+                    <i class="fa-solid fa-plus-circle text-amber-500"></i> 스나이퍼 커스텀 개념 출제기
+                </h3>
+                <span class="text-xs text-slate-400">내가 공부하는 전공/자격증 맞춤 문제를 생성하세요!</span>
+            </div>
+            <div class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 font-semibold mb-1">시험명 / 카테고리</label>
+                        <input type="text" id="customCategory" placeholder="예: 정보처리기사, 공인중개사 1차" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-orange-500 transition-colors">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 font-semibold mb-1">핵심 오답 해설 (꿀팁)</label>
+                        <input type="text" id="customExplanation" placeholder="예: 조건 전체가 무효가 되므로 '조건만' 무효는 틀렸습니다." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-orange-500 transition-colors">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 font-semibold mb-1">정석 정답 개념 (100% 맞는 문장)</label>
+                    <textarea id="customCorrectText" rows="2" placeholder="정석 문장을 기입해 주세요." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-orange-500 transition-colors"></textarea>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                    <div class="md:col-span-8">
+                        <label class="block text-xs text-slate-400 font-semibold mb-1">교묘하게 변형된 함정 문장 (그대로 두고 함정 단어만 아래에 적으세요)</label>
+                        <input type="text" id="customWrongSentence" placeholder="정석 문장과 거의 똑같이 쓰되 틀릴 단어를 한 부위에 넣어 기입하세요." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-orange-500 transition-colors">
+                    </div>
+                    <div class="md:col-span-4">
+                        <label class="block text-xs text-orange-400 font-semibold mb-1"><i class="fa-solid fa-bullseye"></i> 실제 함정 키워드 (정확히 적어주세요)</label>
+                        <input type="text" id="customWrongTarget" placeholder="함정으로 기입한 단어" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-orange-400 bg-orange-500/5 border-orange-500/30 focus:outline-none focus:border-orange-500 transition-colors">
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button onclick="registerCustomQuestion()" class="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold transition-all text-sm flex items-center gap-2 shadow-lg shadow-orange-950/20">
+                        <i class="fa-solid fa-plus"></i> 커스텀 문제 등록하기
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <div id="targetConfigModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl p-6 shadow-2xl relative">
+            <button onclick="closeTargetConfigModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-gear text-orange-500"></i> 나의 디데이 설정
+            </h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs text-slate-400 font-semibold mb-1">준비중인 자격증/시험명</label>
+                    <input type="text" id="modalExamTitle" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-orange-500">
+                </div>
+                <div>
+                    <label class="block text-xs text-slate-400 font-semibold mb-1">시험 예정 일자</label>
+                    <input type="date" id="modalExamDate" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-orange-500">
+                </div>
+                <button onclick="saveTargetConfig()" class="w-full bg-gradient-to-r from-orange-600 to-amber-500 hover:from-orange-500 hover:to-amber-400 text-slate-950 font-extrabold py-2.5 rounded-xl transition-all text-sm mt-2">
+                    반영하기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="gameOverModal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-rose-500/30 w-full max-w-sm rounded-2xl p-6 shadow-2xl text-center space-y-4 relative">
+            <div class="w-16 h-16 bg-rose-500/10 rounded-full flex items-center justify-center text-rose-500 border-2 border-rose-500 text-2xl mx-auto animate-pulse">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white uppercase tracking-wider">미션 실패</h3>
+            <p class="text-slate-400 text-xs leading-relaxed">
+                출제자의 함정 덫에 생명(HP)이 전부 깎였습니다.<br>틀린 문장을 오답 노트에 자동 등록 완료했습니다.
+            </p>
+            <div class="bg-slate-950/80 p-3 rounded-xl text-left border border-slate-800">
+                <div class="flex justify-between text-xs mb-1">
+                    <span class="text-slate-400">클리어한 저격수</span>
+                    <span id="gameOverClearedText" class="hud-font font-bold text-orange-400">0</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-slate-400">이번 콤보 성적</span>
+                    <span id="gameOverComboText" class="hud-font font-bold text-amber-400">0</span>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="closeGameOverModal()" class="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors">
+                    메인으로
+                </button>
+                <button onclick="restartSubjectGame()" class="flex-1 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-slate-950 text-xs font-bold transition-colors">
+                    재도전
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="gameClearModal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-emerald-500/30 w-full max-w-sm rounded-2xl p-6 shadow-2xl text-center space-y-4">
+            <div class="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center text-emerald-400 border-2 border-emerald-500 text-2xl mx-auto animate-bounce">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+            <h3 class="text-xl font-bold text-white uppercase tracking-wider">MISSION CLEAR!</h3>
+            <p class="text-slate-400 text-xs leading-relaxed">
+                축하합니다! 출제자의 모든 교묘한 함정들을 탐지해내고 과목 완벽 정복에 도달했습니다.
+            </p>
+            <div class="bg-slate-950/80 p-3 rounded-xl text-left border border-slate-800">
+                <div class="flex justify-between text-xs mb-1">
+                    <span class="text-slate-400">성공한 저격율</span>
+                    <span class="hud-font font-bold text-emerald-400">100%</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-slate-400">보너스 콤보</span>
+                    <span id="clearComboText" class="hud-font font-bold text-amber-400">0</span>
+                </div>
+            </div>
+            <button onclick="closeClearModal()" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-sm font-extrabold transition-all">
+                완료 대시보드로 복귀
+            </button>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-auto border-t border-slate-800/60 bg-slate-950 py-4 px-4 text-center text-xs text-slate-500">
+        <p>© 2026 개념 스나이퍼 - 메타인지 시험 트레이너. ALL RIGHTS RESERVED.</p>
+    </footer>
+
+    <script>
+        /* -----------------------------------------
+           [1] INITIAL STATE & CONFIGS
+        ----------------------------------------- */
+        let soundOn = true;
+        let isAudioContextStarted = false;
+        
+        // System synth using Tone.js for high accuracy feedback sound
+        let synth;
+        function initAudio() {
+            if (!isAudioContextStarted) {
+                synth = new Tone.Synth().toDestination();
+                isAudioContextStarted = true;
+            }
+        }
+
+        // Local Storage / Fallback configuration data
+        let config = {
+            examTitle: "이러닝운영관리사 2차",
+            examDate: "2026-11-23",
+            dailyTarget: 5,
+            dailyCleared: 0,
+            maxCombo: 0,
+            totalCleared: 0,
+            accuracySum: 0,
+            totalAttempts: 0
+        };
+
+        // Standard pre-defined question database (Professional fields)
+        let questions = [
+            // Category: 이러닝운영관리사
+            {
+                id: 1,
+                category: "이러닝운영관리사",
+                correct: "ADDIE 모형의 분석(Analysis) 단계에서는 학습자 분석, 요구 분석, 환경 분석, 직무 및 과제 분석이 활발하게 수행된다.",
+                wrong: "ADDIE 모형의 분석(Analysis) 단계에서는 학습자 분석, 요구 분석, 환경 분석, 평가 도구 설계가 활발하게 수행된다.",
+                wrongWord: "평가 도구 설계가",
+                explanation: "평가 도구 설계는 분석(A) 단계가 아니라 그 이후인 설계(D) 단계에서 수행되는 핵심 과업입니다. 혼동을 노리는 단골 문제입니다!"
+            },
+            {
+                id: 2,
+                category: "이러닝운영관리사",
+                correct: "스캐포딩(Scaffolding)은 학습자가 스스로 문제 해결에 도달할 수 있도록 한시적으로 제공되는 교수적 조력을 뜻한다.",
+                wrong: "스캐포딩(Scaffolding)은 학습자가 스스로 문제 해결에 도달할 수 있도록 영구적으로 제공되는 교수적 조력을 뜻한다.",
+                wrongWord: "영구적으로",
+                explanation: "스캐포딩(비계 설정)은 학습자가 자기주도학습 능력을 획득할 때까지 제공하는 '한시적' 보조 수단이어야 합니다."
+            },
+            {
+                id: 3,
+                category: "이러닝운영관리사",
+                correct: "LMS(Learning Management System)는 출결, 진도, 학습 이력 등의 전반적인 학사 과정을 체계적으로 통합 관리하는 플랫폼이다.",
+                wrong: "LMS(Learning Management System)는 출결, 진도, 학습 이력 등의 전반적인 콘텐츠 저작 과정을 체계적으로 통합 관리하는 플랫폼이다.",
+                wrongWord: "콘텐츠 저작 과정을",
+                explanation: "콘텐츠 저작은 LCMS(Learning Content Management System) 혹은 별도 저작 도구의 기능입니다. LMS는 순수한 '학습/학사 관리' 중심입니다."
+            },
+            {
+                id: 9,
+                category: "이러닝운영관리사",
+                correct: "SCORM은 이러닝 콘텐츠의 공유, 재사용, 상호운용성을 극대화하기 위해 ADL에서 제안한 이러닝 표준 규격이다.",
+                wrong: "SCORM은 이러닝 콘텐츠의 공유, 재사용, 상호운용성을 극대화하기 위해 W3C에서 제안한 이러닝 표준 규격이다.",
+                wrongWord: "W3C에서",
+                explanation: "SCORM은 월드와이드웹 컨소시엄(W3C)이 아닌, 미국 ADL(Advanced Distributed Learning)에서 제안한 대표적인 이러닝 표준 규격 사양입니다."
+            },
+            {
+                id: 15,
+                category: "이러닝운영관리사",
+                correct: "커크패트릭(Kirkpatrick)의 4단계 교육평가 모형은 반응평가, 학습평가, 행동평가, 결과평가 순으로 구성된다.",
+                wrong: "커크패트릭(Kirkpatrick)의 4단계 교육평가 모형은 반응평가, 학습평가, 환경평가, 결과평가 순으로 구성된다.",
+                wrongWord: "환경평가,",
+                explanation: "커크패트릭 모형의 3단계는 실제 현장 적용 및 실천 여부를 측정하는 '행동평가(Behavior)'입니다. '환경평가'라는 단계는 존재하지 않습니다."
+            },
+            {
+                id: 16,
+                category: "이러닝운영관리사",
+                correct: "가네(Gagne)의 9가지 수업사태 중 첫 번째 단계는 주의집중 시키기이며, 학습자에게 주의를 환기하는 활동이다.",
+                wrong: "가네(Gagne)의 9가지 수업사태 중 첫 번째 단계는 학습목표 제시하기이며, 학습자에게 주의를 환기하는 활동이다.",
+                wrongWord: "학습목표 제시하기이며,",
+                explanation: "가네의 9가지 수업사태 중 제1사태는 '주의집중 시키기(Gaining attention)'입니다. '학습목표 제시'는 두 번째 단계(제2사태)입니다."
+            },
+            {
+                id: 17,
+                category: "이러닝운영관리사",
+                correct: "CCL(Creative Commons License) 조건 중 BY는 저작자표시를 의미하며, 모든 CCL 적용 저작물에 기본적으로 포함되는 필수 조건이다.",
+                wrong: "CCL(Creative Commons License) 조건 중 BY는 비영리 사용을 의미하며, 모든 CCL 적용 저작물에 기본적으로 포함되는 필수 조건이다.",
+                wrongWord: "비영리 사용을",
+                explanation: "BY는 '저작자표시(Attribution)'를 의미합니다. '비영리 조건'은 NC(Non-Commercial) 기호로 표시됩니다."
+            },
+            {
+                id: 18,
+                category: "이러닝운영관리사",
+                correct: "비동기식(Asynchronous) 이러닝은 학습자가 원하는 시간과 장소에서 자기주도적으로 학습할 수 있어 시공간의 제약이 거의 없다.",
+                wrong: "동기식(Synchronous) 이러닝은 학습자가 원하는 시간과 장소에서 자기주도적으로 학습할 수 있어 시공간의 제약이 거의 없다.",
+                wrongWord: "동기식(Synchronous)",
+                explanation: "원하는 시점과 장소에서 자율적으로 개별 학습하는 형태는 '비동기식(Asynchronous)' 이러닝입니다. 실시간 쌍방향 중계 등은 '동기식'입니다."
+            },
+            {
+                id: 19,
+                category: "이러닝운영관리사",
+                correct: "마이크로러닝(Microlearning)은 1~5분 내외의 짧은 시간 동안 핵심 콘텐츠만 집중적으로 학습할 수 있도록 설계된 교육 방식이다.",
+                wrong: "마이크로러닝(Microlearning)은 최소 1시간 이상의 긴 시간 동안 광범위한 이론을 심도 있게 학습하도록 설계된 교육 방식이다.",
+                wrongWord: "최소 1시간 이상의 긴 시간 동안 광범위한 이론을 심도 있게 학습하도록",
+                explanation: "마이크로러닝은 바쁜 현대인이나 학습자가 자투리 시간을 이용해 소화할 수 있도록 1~5분 이내의 짧고 세분화된 분량으로 제공되는 마이크로 콘텐츠 중심 교육 방식입니다."
+            },
+            {
+                id: 20,
+                category: "이러닝운영관리사",
+                correct: "블렌디드 러닝(Blended Learning)은 온·오프라인의 다양한 학습 방법을 결합하여 시너지 효과를 내는 혼합형 교육 형태를 의미한다.",
+                wrong: "블렌디드 러닝(Blended Learning)은 온라인 학습 채널만을 단독으로 활용하여 오프라인 접점을 완벽하게 배제하는 교육 형태를 의미한다.",
+                wrongWord: "온라인 학습 채널만을 단독으로 활용하여 오프라인 접점을 완벽하게 배제하는",
+                explanation: "블렌디드 러닝은 상반되거나 서로 다른 교육적 특성을 혼합한 것으로, 일반적으로는 '온라인 온라인 학습'과 '오프라인 대면 강의'의 유기적 결합을 뜻합니다."
+            },
+            // Category: 정보처리기사
+            {
+                id: 4,
+                category: "정보처리기사",
+                correct: "데이터베이스 트랜잭션의 원자성(Atomicity)은 트랜잭션 연산 전체가 완전히 반영되거나 아예 전혀 반영되지 않아야 함을 의미한다.",
+                wrong: "데이터베이스 트랜잭션의 원자성(Atomicity)은 트랜잭션 연산 전체가 점진적으로 반영되거나 부분 반영이 허용됨을 의미한다.",
+                wrongWord: "점진적으로 반영되거나 부분 반영이 허용됨을",
+                explanation: "원자성은 All or Nothing 구조입니다. 일부분만 반영되는 형태를 엄격하게 금지합니다."
+            },
+            {
+                id: 5,
+                category: "정보처리기사",
+                correct: "애자일(Agile) 선언문에서는 프로세스와 도구보다 개인과의 상호작용을 중시하며 계획을 고수하기보다 변화에 대응할 것을 강조한다.",
+                wrong: "애자일(Agile) 선언문에서는 프로세스와 도구보다 개인과의 상호작용을 중시하며 계획을 준수하기보다 철저한 문서 기록을 강요한다.",
+                wrongWord: "철저한 문서 기록을 강요한다.",
+                explanation: "애자일은 '방대한 문서보다 작동하는 소프트웨어'를 가치 있게 여기며 변화 대응성을 중시합니다."
+            },
+            {
+                id: 10,
+                category: "정보처리기사",
+                correct: "싱글톤(Singleton) 패턴은 클래스의 인스턴스가 오직 하나만 생성되도록 보장하고, 어디서든 이 인스턴스에 접근할 수 있도록 하는 패턴이다.",
+                wrong: "싱글톤(Singleton) 패턴은 클래스의 인스턴스가 무한히 생성되도록 보장하고, 어디서든 이 인스턴스에 접근할 수 있도록 하는 패턴이다.",
+                wrongWord: "무한히 생성되도록",
+                explanation: "싱글톤 패턴은 메모리 낭비를 방지하기 위해 프로그램 실행 중 단 하나의 인스턴스만 보장하는 생성 패턴입니다."
+            },
+            {
+                id: 11,
+                category: "정보처리기사",
+                correct: "소프트웨어 설계에서 결합도(Coupling)는 모듈 간의 상호 의존성을 의미하며, 독립성을 높이기 위해서는 결합도를 낮추어야 한다.",
+                wrong: "소프트웨어 설계에서 결합도(Coupling)는 모듈 간의 상호 의존성을 의미하며, 독립성을 높이기 위해서는 결합도를 높여야 한다.",
+                wrongWord: "결합도를 높여야 한다.",
+                explanation: "유지보수성과 모듈 독립성을 극대화하기 위해서는 모듈 간 결합도는 낮추고(Loose Coupling), 응집도는 높여야(Strong Cohesion) 합니다."
+            },
+            // Category: 공인중개사
+            {
+                id: 6,
+                category: "공인중개사",
+                correct: "민법상 조건이 선량한 풍속 기타 사회질서에 위반한 것인 때에는 그 법률행위는 무효로 한다.",
+                wrong: "민법상 조건이 선량한 풍속 기타 사회질서에 위반한 것인 때에는 그 조건만 무효로 한다.",
+                wrongWord: "그 조건만",
+                explanation: "불법조건(반사회적 조건)이 붙은 법률행위는 조건만 분리하여 무효로 만들 수 없으며, 법률행위 전체가 원천 무효 처리됩니다."
+            },
+            {
+                id: 7,
+                category: "공인중개사",
+                correct: "무권대리인의 상대방이 무권대리 계약 당시 무권대리인임을 안 경우에는 철회권을 행사할 수 없다.",
+                wrong: "무권대리인의 상대방이 무권대리 계약 당시 무권대리인임을 안 경우에는 최고권을 행사할 수 없다.",
+                wrongWord: "최고권을",
+                explanation: "상대방이 악의(안 경우)라 하더라도 '최고'는 본인에게 촉구할 수 있으나, '철회'는 선의의 상대방에게만 부여되는 강력한 무기입니다."
+            },
+            {
+                id: 12,
+                category: "공인중개사",
+                correct: "상가건물 임대차보호법상 임대인은 임대차기간이 끝나기 6개월 전부터 임대차 종료 시까지 권리금 회수 방해금지 의무를 진다.",
+                wrong: "상가건물 임대차보호법상 임대인은 임대차기간이 끝나기 1개월 전부터 임대차 종료 시까지 권리금 회수 방해금지 의무를 진다.",
+                wrongWord: "1개월 전부터",
+                explanation: "임대인의 권리금 회수 방해 금지 기간은 임대차 기간 만료 6개월 전부터 임대차 종료 시까지입니다."
+            },
+            // Category: 한국사능력검정
+            {
+                id: 8,
+                category: "한국사능력검정",
+                correct: "신라 제24대 진흥왕은 대가야를 병합하고 북한산 순수비를 건립하는 등 대대적인 영토 확장을 기했다.",
+                wrong: "신라 제24대 진흥왕은 금관가야를 병합하고 북한산 순수비를 건립하는 등 대대적인 영토 확장을 기했다.",
+                wrongWord: "금관가야를",
+                explanation: "금관가야를 복속하여 영토로 병합한 국왕은 법흥왕입니다. 진흥왕은 대가야를 무너뜨려 낙동강 유역을 완전히 확보하였습니다."
+            },
+            {
+                id: 13,
+                category: "한국사능력검정",
+                correct: "조선의 광해군은 신흥 강국인 후금과 쇠퇴하는 명나라 사이에서 실리를 추구하는 중립 외교를 펼쳤다.",
+                wrong: "조선의 광해군은 신흥 강국인 왜국과 쇠퇴하는 명나라 사이에서 실리를 추구하는 중립 외교를 펼쳤다.",
+                wrongWord: "왜국과",
+                explanation: "광해군 중립 외교의 대상은 임진왜란 이후 만주 지역에서 급부상한 여진족의 후금(청나라)과 전통적 우방이었던 명나라입니다."
+            },
+            {
+                id: 14,
+                category: "한국사능력검정",
+                correct: "조선의 정조는 왕권을 강화하기 위해 왕실 도서관이자 학술 연구 기관인 규장각을 설치하고 서얼 출신 학자들을 기용하였다.",
+                wrong: "조선의 세종은 왕권을 강화하기 위해 왕실 도서관이자 학술 연구 기관인 규장각을 설치하고 서얼 출신 학자들을 기용하였다.",
+                wrongWord: "세종은",
+                explanation: "규장각 설치와 정비, 서얼(검서관) 등용은 조선 후기 개혁 군주인 정조의 업적입니다. 세종대왕은 집현전을 정비하였습니다."
+            }
+        ];
+
+        // Saved wrong answers list
+        let wrongAnswerNotebook = [];
+
+        // Current Playback State
+        let playState = {
+            activeSubject: "",
+            currentQuizList: [],
+            currentQuizIndex: 0,
+            lives: 3,
+            combo: 0,
+            timer: null,
+            timeRemaining: 30,
+            correctCount: 0,
+            totalAttemptCount: 0,
+            targetWrongWord: ""
+        };
+
+        /* -----------------------------------------
+           [2] UTILITIES & THEME ACTIONS
+        ----------------------------------------- */
+        function calculateDDay(dateString) {
+            const targetDate = new Date(dateString);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            targetDate.setHours(0,0,0,0);
+            const timeDiff = targetDate.getTime() - today.getTime();
+            const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+            
+            if (dayDiff > 0) return `D-${dayDiff}`;
+            if (dayDiff === 0) return `D-DAY`;
+            return `D+${Math.abs(dayDiff)}`;
+        }
+
+        function loadConfig() {
+            const saved = localStorage.getItem('concept_sniper_config');
+            if (saved) {
+                config = { ...config, ...JSON.parse(saved) };
+            }
+            const savedWrong = localStorage.getItem('concept_sniper_wrong');
+            if (savedWrong) {
+                wrongAnswerNotebook = JSON.parse(savedWrong);
+            }
+            updateDashboardDOM();
+        }
+
+        function updateDashboardDOM() {
+            // Update D-Day Info
+            document.getElementById('targetExamTitle').innerText = config.examTitle;
+            document.getElementById('targetExamDDay').innerText = calculateDDay(config.examDate);
+            document.getElementById('targetExamDate').innerText = `${config.examDate} 시험 기준`;
+
+            // Daily Progress Calculation
+            const percent = Math.min(100, Math.round((config.dailyCleared / config.dailyTarget) * 100));
+            document.getElementById('dailyProgressPercent').innerText = `${percent}%`;
+            document.getElementById('dailyProgressBar').style.width = `${percent}%`;
+            document.getElementById('headerClearedCount').innerText = `${config.dailyCleared} / ${config.dailyTarget}`;
+
+            // Statistics Info
+            document.getElementById('statMaxCombo').innerText = config.maxCombo;
+            document.getElementById('statTotalCleared').innerText = config.totalCleared;
+            
+            const accuracy = config.totalAttempts > 0 ? Math.round((config.totalCleared / config.totalAttempts) * 100) : 0;
+            document.getElementById('statAccuracy').innerText = `${accuracy}%`;
+
+            renderSubjectCards();
+            renderWrongAnswerNotebook();
+        }
+
+        function toggleSound() {
+            soundOn = !soundOn;
+            const btn = document.getElementById('soundToggleBtn');
+            const icon = document.getElementById('soundIcon');
+            if (soundOn) {
+                icon.className = "fa-solid fa-volume-high";
+                btn.innerHTML = `<i id="soundIcon" class="fa-solid fa-volume-high"></i> <span class="hidden sm:inline">효과음 On</span>`;
+                btn.classList.replace('bg-slate-800', 'bg-slate-800');
+            } else {
+                icon.className = "fa-solid fa-volume-xmark";
+                btn.innerHTML = `<i id="soundIcon" class="fa-solid fa-volume-xmark text-rose-400"></i> <span class="hidden sm:inline">효과음 Off</span>`;
+            }
+        }
+
+        function playSound(type) {
+            if (!soundOn) return;
+            initAudio();
+            try {
+                if (type === 'hit') {
+                    // Success trigger chime sound
+                    synth.triggerAttackRelease("C5", "8n");
+                    setTimeout(() => synth.triggerAttackRelease("E5", "8n"), 100);
+                } else if (type === 'miss') {
+                    // Error warning pitch drop
+                    synth.triggerAttackRelease("A3", "4n");
+                } else if (type === 'win') {
+                    // Epic game loop clear
+                    synth.triggerAttackRelease("C5", "8n");
+                    setTimeout(() => synth.triggerAttackRelease("E5", "8n"), 80);
+                    setTimeout(() => synth.triggerAttackRelease("G5", "8n"), 160);
+                    setTimeout(() => synth.triggerAttackRelease("C6", "4n"), 240);
+                } else if (type === 'tick') {
+                    // Short tension tick sound
+                    synth.triggerAttackRelease("C6", "32n");
+                }
+            } catch(e) {
+                console.log("Audio not allowed yet: ", e);
+            }
+        }
+
+        /* -----------------------------------------
+           [3] RENDERING LISTS (SUBJECTS & REVIEW)
+        ----------------------------------------- */
+        function renderSubjectCards() {
+            const grid = document.getElementById('subjectGrid');
+            grid.innerHTML = "";
+
+            // Group questions to see categories
+            const categories = [...new Set(questions.map(q => q.category))];
+            
+            categories.forEach(cat => {
+                const count = questions.filter(q => q.category === cat).length;
+                const card = document.createElement('div');
+                card.className = "bg-slate-950 p-4 border border-slate-800/80 hover:border-orange-500/50 rounded-xl flex justify-between items-center transition-all cursor-pointer group";
+                card.onclick = () => startGameForSubject(cat);
+                
+                card.innerHTML = `
+                    <div class="space-y-1">
+                        <h4 class="font-bold text-sm text-slate-200 group-hover:text-orange-400 transition-colors">${cat}</h4>
+                        <p class="text-xs text-slate-500"><i class="fa-solid fa-layer-group text-[10px]"></i> 스나이퍼 타겟: ${count}개 개념</p>
+                    </div>
+                    <div class="w-8 h-8 rounded-lg bg-orange-500/10 group-hover:bg-orange-500 text-orange-500 group-hover:text-slate-950 flex items-center justify-center transition-all">
+                        <i class="fa-solid fa-play text-xs"></i>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function renderWrongAnswerNotebook() {
+            const container = document.getElementById('reviewContainer');
+            const emptyState = document.getElementById('emptyReviewState');
+            const badge = document.getElementById('reviewCountBadge');
+
+            // Clear dynamic elements
+            const items = container.querySelectorAll('.review-item');
+            items.forEach(el => el.remove());
+
+            badge.innerText = `저장된 오답 ${wrongAnswerNotebook.length}개`;
+
+            if (wrongAnswerNotebook.length === 0) {
+                emptyState.style.display = "flex";
+                return;
+            } else {
+                emptyState.style.display = "none";
+            }
+
+            wrongAnswerNotebook.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = "review-item bg-slate-950 border border-slate-800/80 p-4 rounded-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-3 hover:border-rose-500/40 transition-colors";
+                
+                row.innerHTML = `
+                    <div class="space-y-1 flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded font-medium">${item.category}</span>
+                            <span class="text-[10px] text-slate-500">등록일자: ${new Date().toLocaleDateString()}</span>
+                        </div>
+                        <p class="text-xs text-slate-400 leading-relaxed mt-1"><b class="text-emerald-400">정석:</b> ${item.correct}</p>
+                        <p class="text-xs text-slate-400 leading-relaxed"><b class="text-rose-400">훼손:</b> ${highlightWrongWordInSentence(item.wrong, item.wrongWord)}</p>
+                        <p class="text-xs text-amber-400/90 font-medium flex items-center gap-1"><i class="fa-solid fa-lightbulb"></i> 핵심: ${item.explanation}</p>
+                    </div>
+                    <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+                        <button onclick="retryWrongAnswer(${index})" class="px-2.5 py-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500 hover:text-slate-950 text-orange-400 text-[11px] font-bold transition-all flex items-center gap-1">
+                            <i class="fa-solid fa-arrow-rotate-left"></i> 단독 저격하기
+                        </button>
+                        <button onclick="deleteWrongAnswer(${index})" class="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 transition-colors">
+                            <i class="fa-solid fa-trash-can text-sm"></i>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        function highlightWrongWordInSentence(full, word) {
+            return full.replace(word, `<span class="bg-rose-500/20 text-rose-400 border border-rose-500/30 px-1 py-0.5 rounded font-bold">${word}</span>`);
+        }
+
+        /* -----------------------------------------
+           [4] CUSTOM QUESTION CREATOR
+        ----------------------------------------- */
+        function registerCustomQuestion() {
+            const cat = document.getElementById('customCategory').value.trim();
+            const expl = document.getElementById('customExplanation').value.trim();
+            const correctText = document.getElementById('customCorrectText').value.trim();
+            const wrongSentence = document.getElementById('customWrongSentence').value.trim();
+            const wrongWord = document.getElementById('customWrongTarget').value.trim();
+
+            if (!cat || !expl || !correctText || !wrongSentence || !wrongWord) {
+                alert("모든 빈칸을 채워야 새로운 함정 요소를 등록할 수 있습니다!");
+                return;
+            }
+
+            if (!wrongSentence.includes(wrongWord)) {
+                alert("함정 문장 내에 실제로 작성한 '함정 키워드'가 온전히 포함되어 있어야 합니다!");
+                return;
+            }
+
+            const newQ = {
+                id: questions.length + 1,
+                category: cat,
+                correct: correctText,
+                wrong: wrongSentence,
+                wrongWord: wrongWord,
+                explanation: expl
+            };
+
+            questions.push(newQ);
+            
+            // Clear fields
+            document.getElementById('customCategory').value = "";
+            document.getElementById('customExplanation').value = "";
+            document.getElementById('customCorrectText').value = "";
+            document.getElementById('customWrongSentence').value = "";
+            document.getElementById('customWrongTarget').value = "";
+
+            alert(`성공적으로 '${cat}' 과목에 신규 스나이퍼 타겟이 반영되었습니다!`);
+            updateDashboardDOM();
+        }
+
+        /* -----------------------------------------
+           [5] INTERACTION & GAME CORE LOOP
+        ----------------------------------------- */
+        function startGameForSubject(subjectName) {
+            initAudio();
+            // Filter targets
+            const filtered = questions.filter(q => q.category === subjectName);
+            if (filtered.length === 0) return;
+
+            // Prepare game variables
+            playState.activeSubject = subjectName;
+            // Shuffles all filtered questions and takes a slice. Scale size to 5 or up to length.
+            const size = Math.min(5, filtered.length);
+            playState.currentQuizList = shuffleArray([...filtered]).slice(0, size);
+            playState.currentQuizIndex = 0;
+            playState.lives = 3;
+            playState.combo = 0;
+            playState.correctCount = 0;
+            playState.totalAttemptCount = 0;
+
+            // Change View
+            document.getElementById('dashboardSection').classList.add('hidden');
+            document.getElementById('gamePlaySection').classList.remove('hidden');
+            document.getElementById('gamePlaySection').classList.add('flex');
+            document.getElementById('feedbackSection').classList.add('hidden');
+
+            loadCurrentQuiz();
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[j], array[i]] = [array[i], array[j]];
+            }
+            return array;
+        }
+
+        function quitGame() {
+            clearInterval(playState.timer);
+            document.getElementById('gamePlaySection').classList.remove('flex');
+            document.getElementById('gamePlaySection').classList.add('hidden');
+            document.getElementById('feedbackSection').classList.add('hidden');
+            document.getElementById('dashboardSection').classList.remove('hidden');
+            updateDashboardDOM();
+        }
+
+        function restartSubjectGame() {
+            closeGameOverModal();
+            startGameForSubject(playState.activeSubject);
+        }
+
+        function loadCurrentQuiz() {
+            clearInterval(playState.timer);
+            
+            // Update Hearts
+            renderHearts();
+
+            const curQuiz = playState.currentQuizList[playState.currentQuizIndex];
+            document.getElementById('gameCurrentCategory').innerText = curQuiz.category;
+            document.getElementById('quizIndexIndicator').innerText = `문항 ${playState.currentQuizIndex + 1}/${playState.currentQuizList.length}`;
+            
+            // Lock Correct Card (Left Side Visuals & Placeholder)
+            lockCorrectConcept();
+
+            // Generate Token Spans for Wrong/Target card
+            const container = document.getElementById('conceptTextTargetContainer');
+            container.innerHTML = "";
+            playState.targetWrongWord = curQuiz.wrongWord;
+
+            // We break the wrong sentence into tokens smart enough to isolate the target word
+            const sentence = curQuiz.wrong;
+            const targetWord = curQuiz.wrongWord;
+
+            let tokens = [];
+            // Safe replacement token split
+            const placeholder = "___TARGET_PLACEHOLDER___";
+            const processedSentence = sentence.replace(targetWord, ` ${placeholder} `);
+            const rawTokens = processedSentence.split(/\s+/).filter(t => t.trim() !== "");
+
+            rawTokens.forEach(t => {
+                if (t === placeholder) {
+                    tokens.push({ text: targetWord, isTarget: true });
+                } else {
+                    tokens.push({ text: t, isTarget: false });
+                }
+            });
+
+            tokens.forEach((tok, index) => {
+                const span = document.createElement('span');
+                span.innerText = tok.text;
+                span.className = "px-2 py-1 rounded-md text-slate-200 hover:bg-rose-500/20 hover:text-rose-400 border border-transparent hover:border-rose-500/30 cursor-pointer transition-all select-none hover:scale-105 active:scale-95 flex items-center";
+                
+                // Clicking token acts as sniping action
+                span.onclick = () => handleSnipeAttempt(tok.isTarget, span);
+                
+                container.appendChild(span);
+                
+                // Add minor gap space
+                if (index < tokens.length - 1) {
+                    const space = document.createElement('span');
+                    space.className = "w-1 h-2 select-none pointer-events-none";
+                    container.appendChild(space);
+                }
+            });
+
+            // Start Timer (30 Seconds countdown)
+            playState.timeRemaining = 30;
+            document.getElementById('gameTimerText').innerText = playState.timeRemaining;
+            document.getElementById('gameTimerBar').style.width = "100%";
+            document.getElementById('gameTimerBar').className = "bg-emerald-500 h-full transition-all duration-100 ease-linear";
+            document.getElementById('gameTimerText').classList.remove('text-rose-500', 'scale-110', 'font-black', 'animate-pulse');
+
+            playState.timer = setInterval(() => {
+                playState.timeRemaining--;
+                document.getElementById('gameTimerText').innerText = playState.timeRemaining;
+                
+                // Timer Color Alerts
+                const ratio = playState.timeRemaining / 30;
+                document.getElementById('gameTimerBar').style.width = `${ratio * 100}%`;
+                
+                if (playState.timeRemaining <= 10) {
+                    // Apply visual warning styling when 10 seconds or less
+                    document.getElementById('gameTimerBar').className = "h-full transition-all duration-100 ease-linear timer-warning";
+                    document.getElementById('gameTimerText').classList.add('text-rose-500', 'scale-110', 'font-black', 'animate-pulse');
+                    
+                    // Tension ticking sound for the critical last 5 seconds
+                    if (playState.timeRemaining <= 5 && playState.timeRemaining > 0) {
+                        playSound('tick');
+                    }
+                }
+
+                if (playState.timeRemaining <= 0) {
+                    clearInterval(playState.timer);
+                    handleTimeOut();
+                }
+            }, 1000);
+        }
+
+        /* -----------------------------------------
+           LOCKED / UNLOCKED CORRECT CONCEPT LOGIC
+        ----------------------------------------- */
+        function lockCorrectConcept() {
+            // Adjust Card A style to Locked look
+            const wrapper = document.getElementById('correctCardWrapper');
+            const header = document.getElementById('correctCardHeader');
+            const footer = document.getElementById('correctCardFooter');
+
+            wrapper.className = "bg-slate-900 border-2 border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between transition-all duration-300";
+            header.className = "absolute top-0 left-0 bg-slate-800 text-slate-400 font-bold px-4 py-1 text-xs rounded-br-xl flex items-center gap-1.5 transition-all";
+            header.innerHTML = `<i class="fa-solid fa-lock"></i> 정석 개념 (잠금됨)`;
+            footer.innerHTML = `<i class="fa-solid fa-circle-info"></i> 함정을 저격하기 전까지는 정석 개념이 격리됩니다.`;
+            footer.className = "border-t border-slate-800/80 pt-3 text-xs text-slate-500 flex items-center gap-2";
+
+            // Add futuristic lock UI inside the text container
+            document.getElementById('conceptTextCorrect').innerHTML = `
+                <div class="flex flex-col items-center justify-center py-6 text-center text-slate-500 space-y-3">
+                    <div class="w-14 h-14 rounded-full bg-slate-950 flex items-center justify-center text-orange-500 border border-slate-800/80 shadow-inner">
+                        <i class="fa-solid fa-lock text-xl animate-pulse"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-bold text-slate-400 tracking-tight">정석 개념 프로토콜 오프라인</p>
+                        <p class="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+                            우측의 스나이퍼 타겟에서 교묘한 함정 단어를 터치하면<br>
+                            대조 분석을 위해 정석 문장의 봉인이 즉시 해제됩니다.
+                        </p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function unlockCorrectConcept() {
+            const curQuiz = playState.currentQuizList[playState.currentQuizIndex];
+            
+            // Adjust Card A style to Unlocked / Success look
+            const wrapper = document.getElementById('correctCardWrapper');
+            const header = document.getElementById('correctCardHeader');
+            const footer = document.getElementById('correctCardFooter');
+
+            wrapper.className = "bg-slate-900 border-2 border-emerald-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden flex flex-col justify-between transition-all duration-300";
+            header.className = "absolute top-0 left-0 bg-emerald-500 text-slate-950 font-bold px-4 py-1 text-xs rounded-br-xl flex items-center gap-1.5 transition-all";
+            header.innerHTML = `<i class="fa-solid fa-unlock-keyhole"></i> 정석 개념 해제됨`;
+            footer.innerHTML = `<i class="fa-solid fa-check-double text-emerald-400 animate-pulse"></i> 오류 분석 및 원본 데이터 매칭 성공`;
+            footer.className = "border-t border-slate-800/80 pt-3 text-xs text-emerald-400/80 flex items-center gap-2";
+
+            // Injected text with smooth fade-in
+            document.getElementById('conceptTextCorrect').innerHTML = `
+                <div class="animate-fade-in text-slate-200">
+                    ${curQuiz.correct}
+                </div>
+            `;
+        }
+
+        function renderHearts() {
+            const cont = document.getElementById('heartsContainer');
+            cont.innerHTML = "";
+            for (let i = 0; i < 3; i++) {
+                const heart = document.createElement('i');
+                if (i < playState.lives) {
+                    heart.className = "fa-solid fa-heart text-rose-500 text-sm animate-pulse";
+                } else {
+                    heart.className = "fa-regular fa-heart text-slate-700 text-sm";
+                }
+                cont.appendChild(heart);
+            }
+        }
+
+        function handleSnipeAttempt(isCorrectTarget, element) {
+            clearInterval(playState.timer);
+            playState.totalAttemptCount++;
+            config.totalAttempts++;
+
+            // Reveal correct concept on left regardless of outcome (for instant feedback comparison)
+            unlockCorrectConcept();
+
+            if (isCorrectTarget) {
+                // SUCCESS HIT!
+                playSound('hit');
+                playState.combo++;
+                playState.correctCount++;
+                
+                // Update Max Combo
+                if (playState.combo > config.maxCombo) {
+                    config.maxCombo = playState.combo;
+                }
+
+                // Visual target hit confirm
+                element.className = "px-2 py-1 rounded-md bg-emerald-500 text-slate-950 border border-emerald-400 font-bold animate-bounce";
+                
+                setTimeout(() => {
+                    showFeedback(true);
+                }, 800);
+
+            } else {
+                // MISS!
+                playSound('miss');
+                playState.combo = 0;
+                playState.lives--;
+                renderHearts();
+
+                // Show fail indication on target
+                element.className = "px-2 py-1 rounded-md bg-rose-500/20 text-rose-500 border border-rose-500 animate-wiggle font-bold";
+
+                // Save question as Failed to wrong notebook
+                saveToWrongNotebook();
+
+                if (playState.lives <= 0) {
+                    setTimeout(() => {
+                        triggerGameOver();
+                    }, 800);
+                } else {
+                    setTimeout(() => {
+                        showFeedback(false);
+                    }, 800);
+                }
+            }
+            document.getElementById('gameComboCount').innerText = playState.combo;
+        }
+
+        function handleTimeOut() {
+            playSound('miss');
+            playState.combo = 0;
+            playState.lives--;
+            renderHearts();
+            document.getElementById('gameComboCount').innerText = playState.combo;
+            
+            // Unlock on timeout to show correct model answer
+            unlockCorrectConcept();
+            saveToWrongNotebook();
+
+            if (playState.lives <= 0) {
+                triggerGameOver();
+            } else {
+                showFeedback(false, "제한 시간을 초과하였습니다!");
+            }
+        }
+
+        function saveToWrongNotebook() {
+            const curQuiz = playState.currentQuizList[playState.currentQuizIndex];
+            // Check if already in list
+            if (!wrongAnswerNotebook.some(q => q.id === curQuiz.id)) {
+                wrongAnswerNotebook.push(curQuiz);
+                localStorage.setItem('concept_sniper_wrong', JSON.stringify(wrongAnswerNotebook));
+            }
+        }
+
+        function showFeedback(isHit, overrideDesc = "") {
+            const curQuiz = playState.currentQuizList[playState.currentQuizIndex];
+            const modal = document.getElementById('feedbackSection');
+            
+            // Show Feedback Module
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            
+            // Adjust header depending on Success vs Fail
+            const border = document.getElementById('feedbackBorderBg');
+            const iconWrapper = document.getElementById('feedbackIconWrapper');
+            const title = document.getElementById('feedbackTitle');
+            const desc = document.getElementById('feedbackDesc');
+
+            if (isHit) {
+                border.className = "absolute inset-x-0 top-0 h-2 bg-gradient-to-r from-emerald-500 to-teal-400";
+                iconWrapper.className = "w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center border-2 border-emerald-500 text-emerald-400 text-3xl mb-4 animate-bounce";
+                iconWrapper.innerHTML = `<i class="fa-solid fa-bullseye"></i>`;
+                title.innerText = "TARGET SNIPED!";
+                title.className = "text-2xl font-bold text-emerald-400 mb-2 hud-font";
+                desc.innerText = "훌륭합니다! 교묘하게 조작된 키워드를 탐지하는 메타인지 감지 센서가 완벽히 작동했습니다.";
+            } else {
+                border.className = "absolute inset-x-0 top-0 h-2 bg-gradient-to-r from-rose-500 to-amber-500";
+                iconWrapper.className = "w-20 h-20 bg-rose-500/10 rounded-full flex items-center justify-center border-2 border-rose-500 text-rose-500 text-3xl mb-4 animate-shake";
+                iconWrapper.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i>`;
+                title.innerText = "저격 미스 (MISS)";
+                title.className = "text-2xl font-bold text-rose-400 mb-2 hud-font";
+                desc.innerText = overrideDesc || "출제자의 미끼에 완벽하게 낚였습니다! 교묘한 말장난 함정을 더 치밀하게 체크해보세요.";
+            }
+
+            // Fill Comparative Data
+            document.getElementById('feedbackCorrectAnswer').innerText = curQuiz.correct;
+            document.getElementById('feedbackWrongAnswer').innerHTML = highlightWrongWordInSentence(curQuiz.wrong, curQuiz.wrongWord);
+            document.getElementById('feedbackExplanation').innerText = curQuiz.explanation;
+
+            // Change Next Button Text if it is the last item
+            const nextBtn = document.getElementById('nextQuizBtn');
+            if (playState.currentQuizIndex === playState.currentQuizList.length - 1) {
+                nextBtn.innerHTML = `종합 결과 확인 <i class="fa-solid fa-trophy text-xs"></i>`;
+            } else {
+                nextBtn.innerHTML = `다음 저격 타겟 <i class="fa-solid fa-chevron-right text-xs"></i>`;
+            }
+        }
+
+        function loadNextQuiz() {
+            document.getElementById('feedbackSection').classList.remove('flex');
+            document.getElementById('feedbackSection').classList.add('hidden');
+
+            if (playState.currentQuizIndex === playState.currentQuizList.length - 1) {
+                // Game Clear!
+                triggerGameClear();
+            } else {
+                playState.currentQuizIndex++;
+                loadCurrentQuiz();
+            }
+        }
+
+        function triggerGameOver() {
+            clearInterval(playState.timer);
+            document.getElementById('gameOverClearedText').innerText = `${playState.correctCount} / ${playState.currentQuizList.length}`;
+            document.getElementById('gameOverComboText').innerText = playState.combo;
+            
+            document.getElementById('gameOverModal').classList.remove('hidden');
+        }
+
+        function closeGameOverModal() {
+            document.getElementById('gameOverModal').classList.add('hidden');
+            quitGame();
+        }
+
+        function triggerGameClear() {
+            clearInterval(playState.timer);
+            playSound('win');
+            
+            // Increment overall achievements
+            config.dailyCleared++;
+            config.totalCleared += playState.correctCount;
+            localStorage.setItem('concept_sniper_config', JSON.stringify(config));
+
+            document.getElementById('clearComboText').innerText = playState.combo;
+            document.getElementById('gameClearModal').classList.remove('hidden');
+        }
+
+        function closeClearModal() {
+            document.getElementById('gameClearModal').classList.add('hidden');
+            quitGame();
+        }
+
+        /* -----------------------------------------
+           [6] SINGLE REVIEWS & EXTRA CRUD
+        ----------------------------------------- */
+        function retryWrongAnswer(index) {
+            initAudio();
+            const wrongItem = wrongAnswerNotebook[index];
+            
+            // Construct simulated mini 1-question game
+            playState.activeSubject = "오답 트레이닝";
+            playState.currentQuizList = [wrongItem];
+            playState.currentQuizIndex = 0;
+            playState.lives = 1; // High tension
+            playState.combo = 0;
+            playState.correctCount = 0;
+            playState.totalAttemptCount = 0;
+
+            document.getElementById('dashboardSection').classList.add('hidden');
+            document.getElementById('gamePlaySection').classList.remove('hidden');
+            document.getElementById('gamePlaySection').classList.add('flex');
+            document.getElementById('feedbackSection').classList.add('hidden');
+
+            loadCurrentQuiz();
+        }
+
+        function deleteWrongAnswer(index) {
+            wrongAnswerNotebook.splice(index, 1);
+            localStorage.setItem('concept_sniper_wrong', JSON.stringify(wrongAnswerNotebook));
+            updateDashboardDOM();
+        }
+
+        /* -----------------------------------------
+           [7] TARGET D-DAY CONFIGS
+        ----------------------------------------- */
+        function openTargetConfigModal() {
+            document.getElementById('modalExamTitle').value = config.examTitle;
+            document.getElementById('modalExamDate').value = config.examDate;
+            document.getElementById('targetConfigModal').classList.remove('hidden');
+        }
+
+        function closeTargetConfigModal() {
+            document.getElementById('targetConfigModal').classList.add('hidden');
+        }
+
+        function saveTargetConfig() {
+            const title = document.getElementById('modalExamTitle').value.trim();
+            const date = document.getElementById('modalExamDate').value;
+            if (!title || !date) return;
+
+            config.examTitle = title;
+            config.examDate = date;
+            localStorage.setItem('concept_sniper_config', JSON.stringify(config));
+            
+            closeTargetConfigModal();
+            updateDashboardDOM();
+        }
+
+        // Initialize App on Window Load
+        window.onload = function() {
+            loadConfig();
+        }
+    </script>
+</body>
+</html>
